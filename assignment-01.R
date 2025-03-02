@@ -119,4 +119,25 @@ rmse <- function(model, data) {
 rmse_values <- c(rmse(model1, pharmacists), rmse(model2, pharmacists), rmse(model3, pharmacists), rmse(model4, pharmacists_filtered))
 bic_values <- c(BIC(model1), BIC(model2), BIC(model3), BIC(model4))
 
+# Perform 10-fold cross-validation
+set.seed(123)
+cv_control <- trainControl(method = "cv", number = 10)
+
+cv_model1 <- train(earn_per_hour ~ age + sex, data = pharmacists, method = "lm", trControl = cv_control)
+
+cv_model2 <- train(earn_per_hour ~ age + sex + grade92 + class, 
+                   data = pharmacists, 
+                   method = "lm", 
+                   trControl = cv_control, 
+                   na.action = na.omit)
+
+cv_model3 <- train(earn_per_hour ~ age + sex + grade92 + class + prcitshp,  # Removed `region`
+                   data = pharmacists, 
+                   method = "lm", 
+                   trControl = cv_control, 
+                   na.action = na.omit)
+
+
+
+cv_model4 <- train(earn_per_hour ~ age_centered + age2_centered + sex + grade92 + class, data = pharmacists_filtered, method = "lm", trControl = cv_control, na.action = na.omit)
 
