@@ -141,3 +141,12 @@ cv_model3 <- train(earn_per_hour ~ age + sex + grade92 + class + prcitshp,  # Re
 
 cv_model4 <- train(earn_per_hour ~ age_centered + age2_centered + sex + grade92 + class, data = pharmacists_filtered, method = "lm", trControl = cv_control, na.action = na.omit)
 
+# Print performance metrics results
+cv_results <- data.frame(
+  Model = c("Model 1", "Model 2", "Model 3", "Model 4"),
+  RMSE = rmse_values,
+  BIC = bic_values,
+  Cross_Validated_RMSE = c(cv_model1$results$RMSE, cv_model2$results$RMSE, cv_model3$results$RMSE, cv_model4$results$RMSE)
+)
+
+print(cv_results)
