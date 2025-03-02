@@ -108,5 +108,15 @@ model4 <- lm(earn_per_hour ~ age_centered + age2_centered + sex + grade92 + clas
 
 summary(model4)
 
+####### Model Performance Metrics #######
+
+# Define RMSE function
+rmse <- function(model, data) {
+  sqrt(mean((data$earn_per_hour - predict(model, data))^2))
+}
+
+# Calculate RMSE and BIC for all models
+rmse_values <- c(rmse(model1, pharmacists), rmse(model2, pharmacists), rmse(model3, pharmacists), rmse(model4, pharmacists_filtered))
+bic_values <- c(BIC(model1), BIC(model2), BIC(model3), BIC(model4))
 
 
