@@ -575,3 +575,57 @@ evaluate_model <- function(model, data, model_type = "ols") {
 }
 ```
 
+## 6. Applying Core Models to Q4 Florida and Denver Airbnb Data
+
+To evaluate how well the models generalize to newer data, I applied all five core models, OLS, LASSO, CART, Random Forest, and XGBoost to a new datasets from Florida and Denver, covering the fourth quarter.
+
+### 6.1. Applying to Florida Q4 Dataset 
+```{r Florida Q4 Models}
+
+# OLS
+ols_fl <- lm(price ~ ., data = florida_q4)
+ols_fl_results <- evaluate_model(ols_fl, florida_q4)
+
+# LASSO
+X_fl <- model.matrix(price ~ ., data = florida_q4)[, -1]
+y_fl <- florida_q4$price
+lasso_fl_model <- cv.glmnet(X_fl, y_fl, alpha = 1)
+lasso_fl_preds <- predict(lasso_fl_model, s = "lambda.min", newx = X_fl)
+lasso_fl_results <- c(RMSE = rmse(y_fl, lasso_fl_preds), R2 = R2(lasso_fl_preds, y_fl))
+
+# CART
+cart_fl <- rpart(price ~ ., data = florida_q4)
+cart_fl_results <- evaluate_model(cart_fl, florida_q4)
+
+# RF
+rf_fl_results <- evaluate_model(model_rf, florida_q4)
+
+# XGBoost
+xgb_fl_results <- evaluate_model(model_xgb, florida_q4, model_type = "xgb")
+```
+
+### 6.2. Applying to Denver Q4 Dataset
+```{r Denver Q4 Models}
+
+# OLS
+ols_dv <- lm(price ~ ., data = denver_q4)
+ols_dv_results <- evaluate_model(ols_dv, denver_q4)
+
+# LASSO
+X_dv <- model.matrix(price ~ ., data = denver_q4)[, -1]
+y_dv <- denver_q4$price
+lasso_dv_model <- cv.glmnet(X_dv, y_dv, alpha = 1)
+lasso_dv_preds <- predict(lasso_dv_model, s = "lambda.min", newx = X_dv)
+lasso_dv_results <- c(RMSE = rmse(y_dv, lasso_dv_preds), R2 = R2(lasso_dv_preds, y_dv))
+
+# CART
+cart_dv <- rpart(price ~ ., data = denver_q4)
+cart_dv_results <- evaluate_model(cart_dv, denver_q4)
+
+# RF
+rf_dv_results <- evaluate_model(model_rf, denver_q4)
+
+# XGBoost
+xgb_dv_results <- evaluate_model(model_xgb, denver_q4, model_type = "xgb")
+```
+
