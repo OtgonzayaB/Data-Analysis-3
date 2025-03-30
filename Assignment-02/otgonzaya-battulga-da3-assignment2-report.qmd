@@ -155,3 +155,24 @@ glimpse(df_model)
 
 Finally, I converted categorical variables (property_type, room_type, and neighbourhood_cleansed) to numerical factors and removed any constant or missing-value-only columns to ensure compatibility with modeling.
 
+## 2. Building Predictive Models
+
+The cleaned and feature-engineered dataset was then split into training and testing sets, with 80% of the data used for model training and 20% for evaluation. Constant columns and those with only a single unique value were removed to prevent issues during model fitting.
+
+```{r train-test split}
+set.seed(123)
+trainIndex <- createDataPartition(df_model$price, p = 0.8, list = FALSE)
+train <- df_model[trainIndex, ]
+test  <- df_model[-trainIndex, ]
+
+# Separate features and target
+X_train <- train %>% select(-price)
+y_train <- train$price
+X_test <- test %>% select(-price)
+y_test <- test$price
+
+# Remove columns with only 1 unique value
+X_train <- X_train[, sapply(X_train, function(col) length(unique(col)) > 1)]
+X_test <- X_test[, colnames(X_train)]  # Match test columns to training set
+```
+
