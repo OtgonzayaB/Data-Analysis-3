@@ -1,0 +1,72 @@
+---
+title: "Assignment 2"
+author: "Otgonzaya Battulga"
+date: "2025-03-30"
+format: html
+editor: visual
+---
+# Building a Prediction Model on House Prices.
+
+In this report, I have developed a pricing model to support the operation of a chain of Airbnb properties by building and evaluating machine learning models that predict listing prices based on property characteristics, host attributes, amenities, and location.
+
+The core dataset used is the **Q3 2024 Airbnb listings for Florida**, sourced from **Inside Airbnb**. This dataset contains over 16,000 observations, providing a comprehensive snapshot of the Florida short-term rental market. Extensive data wrangling was performed, including the extraction of key amenities, handling of missing values, and transformation of categorical variables into model ready features.
+
+**Five predictive models were developed and compared:**
+
+- Ordinary Least Squares (OLS)
+- LASSO Regression
+- Random Forest
+- XGBoost
+- CART
+
+Model performance was evaluated based on predictive accuracy (RMSE and R^2) and training time, summarized in a horserace table. The best-performing models, Random Forest and XGBoost were further analyzed to explore feature importance and identify key price drivers.
+
+**To test the validity and generalizability of the models, two additional datasets were introduced:**
+
+- A later snapshot from the same region: Florida Q4 2024
+- A different market within the U.S.: Denver Q4 2024
+
+These datasets were used to evaluate how well the models perform across time and geographic location, providing insights into their robustness and potential for wider deployment across an Airbnb portfolio.
+
+```{r loading libraries}
+#| output: false
+#| echo: false
+#| message: false
+#| warning: false
+
+library(readxl)
+library(tidyverse)
+library(caret)
+library(glmnet)
+library(randomForest)
+library(xgboost)
+library(e1071)
+library(Metrics)
+library(rpart)
+library(rpart.plot)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(MetBrewer)
+library(scales)
+library(kableExtra)
+```
+
+```{r importing the dataset}
+#| echo: false
+#| warning: false
+
+# Set the path to your dataset
+file_path <- "data/florida-q3-listings.xlsx"
+
+# Read the Excel file
+df <- read_excel(file_path)
+```
+
+```{r see column names}
+#| output: false
+#| echo: false
+
+names(df)
+```
+
