@@ -408,3 +408,18 @@ CART models are easy to interpret and visualize, making them particularly useful
 
 Training was very fast, taking only 0.315 seconds, and the model achieved an RMSE of 113.31 and an R^2 of 0.3628. While the performance was weaker than more complex models like Random Forest and XGBoost, CART offers strong interpretability and remains a good baseline model.
 
+## 3. Model Comparisons
+
+To evaluate the predictive performance of the five models, I compared them using RMSE, R-squared, and training time. These metrics provide a comprehensive picture of both fit accuracy and time efficiency.
+
+```{r Combined Model Results}
+
+results_all <- rbind(results_ols, results_lasso, results_cart, results_rf, results_xgb)
+
+knitr::kable(results_all, caption = "Model Performance Comparison", align = "c")
+```
+
+Both XGBoost and Random Forest clearly outperformed the other models in terms of fit, with RMSE values of 86.64 and 87.03, and R^2 scores of 0.6263 and 0.6232, respectively. These results indicate that ensemble models were best at capturing complex and nonlinear relationships in the data, making them strong candidates for real-world deployment in Airbnb pricing strategies. In contrast, OLS and LASSO performed nearly identically, each yielding an RMSE around 108.87 and R^2 close to 0.41. This suggests that linear models could explain some of the variance in price but lacked the flexibility to capture deeper patterns. 
+
+The decision tree model (CART) showed the weakest predictive performance, with an RMSE of 113.31 and R^2 of 0.3628. However, it was one of the fastest models to train (0.315 seconds) and provides useful interpretability through tree structure. In terms of training time, OLS was the fastest (0.039s), followed by LASSO (0.213s) and CART. Random Forest was the slowest to train (13.917s) due to its iterative construction of multiple trees. XGBoost offered an excellent trade-off by training faster than Random Forest (1.054s) while delivering slightly better performance, making it the top overall performer. While Random Forest is a robust and interpretable alternative, XGBoost would be the preferred model for deployment due to its strong balance between speed and predictive power. Overall, ensemble methods substantially outperformed linear and tree based models, proving most suitable for the high dimensional, nonlinear nature of Airbnb pricing data.
+
