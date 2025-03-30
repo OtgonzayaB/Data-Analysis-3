@@ -546,3 +546,32 @@ clean_airbnb_data <- function(file_path) {
 
 Using this standardized process, I produced two clean and structured datasets: one for Florida (Q4) and one for Denver (Q4), both ready for modeling.
 
+```{r cleaning the later date and other city data}
+#| output: false
+#| echo: false
+#| warning: false
+florida_q4 <- clean_airbnb_data("data/florida-q4-listings.xlsx")
+denver_q4 <- clean_airbnb_data("data/denver-q4-listings.xlsx")
+```
+
+To evaluate performance on these new datasets, I created a general evaluate_model() function. It predicts prices using each model and computes RMSE and R^2 for both linear and tree based models, including a specific handling for XGBoost.
+
+```{r model evalution function}
+
+evaluate_model <- function(model, data, model_type = "ols") {
+  X <- data %>% select(-price)
+  y <- data$price
+  
+  if (model_type == "xgb") {
+    preds <- predict(model, newdata = xgb.DMatrix(data = as.matrix(X)))
+  } else {
+    preds <- predict(model, newdata = X)
+  }
+
+  return(c(
+    RMSE = rmse(y, preds),
+    R2 = R2(preds, y)
+  ))
+}
+```
+
