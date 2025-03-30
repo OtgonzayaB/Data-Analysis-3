@@ -423,3 +423,57 @@ Both XGBoost and Random Forest clearly outperformed the other models in terms of
 
 The decision tree model (CART) showed the weakest predictive performance, with an RMSE of 113.31 and R^2 of 0.3628. However, it was one of the fastest models to train (0.315 seconds) and provides useful interpretability through tree structure. In terms of training time, OLS was the fastest (0.039s), followed by LASSO (0.213s) and CART. Random Forest was the slowest to train (13.917s) due to its iterative construction of multiple trees. XGBoost offered an excellent trade-off by training faster than Random Forest (1.054s) while delivering slightly better performance, making it the top overall performer. While Random Forest is a robust and interpretable alternative, XGBoost would be the preferred model for deployment due to its strong balance between speed and predictive power. Overall, ensemble methods substantially outperformed linear and tree based models, proving most suitable for the high dimensional, nonlinear nature of Airbnb pricing data.
 
+## 4. RF and Boosting Model Analysis
+
+```{r Random Forest Feature Importance}
+
+importance_rf <- importance(model_rf)
+importance_rf_df <- data.frame(
+  Feature = rownames(importance_rf),
+  Importance = importance_rf[, "IncNodePurity"]
+) %>%
+  arrange(desc(Importance)) %>%
+  dplyr::slice(1:10)
+
+# Plot
+ggplot(importance_rf_df, aes(x = reorder(Feature, Importance), y = Importance, fill = Feature)) +
+  geom_col(show.legend = FALSE, width = 0.7) +
+  coord_flip() +
+  scale_fill_manual(values = met.brewer("VanGogh2", 10)) +
+  labs(
+    title = "Random Forest – Top 10 Feature Importances",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+    axis.text = element_text(size = 12),
+    panel.grid.major.y = element_blank()
+  )
+```
+
+```{r XGBoost Feature Importance}
+
+importance_xgb_dt <- xgb.importance(model = model_xgb)
+top10_xgb <- importance_xgb_dt[order(-Gain)][1:10]
+
+# Plot
+xgb.plot.importance(
+  importance_matrix = top10_xgb,
+  top_n = 10,
+  measure = "Gain",
+  rel_to_first = TRUE,
+  main = "XGBoost - Top 10 Feature Importances",
+  col = met.brewer("VanGogh2", 10)  # Optional: Van Gogh colors!
+)
+```
+
+Both the Random Forest and XGBoost models identified similar key factors that affect Airbnb pricing. In both models, the number of bathrooms, how many guests a place can accommodate, and the number of bedrooms were the most important features. This makes sense, as larger and more comfortable listings tend to cost more.
+
+The Random Forest model also highlighted the number of properties a host manages, suggesting that experienced hosts may price differently. It showed that location (longitude and latitude) and host behavior, like how often they accept bookings, also matter. These results show that Random Forest can pick up on patterns in how listings are priced based on size, location, and host experience.
+
+XGBoost also picked up on these factors but gave a bit more weight to location and specific amenities, such as having a pool or Wi-Fi. This suggests that XGBoost is especially good at detecting smaller, more detailed effects that can influence price like being in a desirable neighborhood or offering popular features.
+
+In summary, both models agree on what matters most for price, but XGBoost captures a broader picture by paying closer attention to location and amenities. This makes it a strong choice for building a pricing model that reflects both the basics and finer details of what makes a listing valuable.
+
