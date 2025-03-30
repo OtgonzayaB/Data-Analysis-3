@@ -129,3 +129,29 @@ df_model <- df_model %>%
 ```
 
 To handle missing data, I used median imputation for numerical fields such as bedrooms, bathrooms, beds, and the host-related response and acceptance rates. For the amenities, I used regular expressions to create binary indicator variables based on whether a listing includes features like "Wifi", "Kitchen", or "Pool" in its amenities string.
+
+```{r}
+#| output: false
+#| warning: false
+
+# Select relevant columns
+df_model <- df_model %>%
+  select(price, accommodates, bedrooms, beds, bathrooms,
+         host_is_superhost, host_identity_verified, host_has_profile_pic,
+         host_response_rate, host_acceptance_rate, host_listings_count,
+         latitude, longitude, neighbourhood_cleansed,
+         property_type, room_type,
+         starts_with("has_")) %>%
+  drop_na()
+
+# Convert categorical vars to numeric
+df_model <- df_model %>%
+  mutate(across(c(property_type, room_type, neighbourhood_cleansed), as.factor)) %>%
+  mutate(across(c(property_type, room_type, neighbourhood_cleansed), ~ as.numeric(as.factor(.x))))
+
+# Final check
+glimpse(df_model)
+```
+
+Finally, I converted categorical variables (property_type, room_type, and neighbourhood_cleansed) to numerical factors and removed any constant or missing-value-only columns to ensure compatibility with modeling.
+
