@@ -101,3 +101,31 @@ df_model <- df %>%
 
 The price column was first cleaned by removing dollar signs and commas, and filtered to exclude extreme outliers (keeping prices between $20 and $1000). Boolean features such as host_is_superhost, host_identity_verified, and host_has_profile_pic were converted from text to binary (1/0) format. Similarly, percentage-based features like host_response_rate and host_acceptance_rate were converted to numeric.
 
+```{r}
+# Impute missing values for numerical columns
+df_model <- df_model %>%
+  mutate(
+    bedrooms = ifelse(is.na(bedrooms), median(bedrooms, na.rm = TRUE), bedrooms),
+    beds = ifelse(is.na(beds), median(beds, na.rm = TRUE), beds),
+    bathrooms = ifelse(is.na(bathrooms), median(bathrooms, na.rm = TRUE), bathrooms),
+    host_response_rate = ifelse(is.na(host_response_rate), median(host_response_rate, na.rm = TRUE), host_response_rate),
+    host_acceptance_rate = ifelse(is.na(host_acceptance_rate), median(host_acceptance_rate, na.rm = TRUE), host_acceptance_rate),
+    host_listings_count = ifelse(is.na(host_listings_count), median(host_listings_count, na.rm = TRUE), host_listings_count)
+  )
+
+# Parse amenities into binary features
+df_model <- df_model %>%
+  mutate(
+    has_wifi = as.numeric(grepl("Wifi", amenities)),
+    has_kitchen = as.numeric(grepl("Kitchen", amenities)),
+    has_pool = as.numeric(grepl("Pool", amenities)),
+    has_aircon = as.numeric(grepl("Air conditioning", amenities)),
+    has_parking = as.numeric(grepl("Free parking", amenities)),
+    has_tv = as.numeric(grepl("TV", amenities)),
+    has_hot_tub = as.numeric(grepl("Hot tub", amenities)),
+    has_washer = as.numeric(grepl("Washer", amenities)),
+    has_dryer = as.numeric(grepl("Dryer", amenities))
+  )
+```
+
+To handle missing data, I used median imputation for numerical fields such as bedrooms, bathrooms, beds, and the host-related response and acceptance rates. For the amenities, I used regular expressions to create binary indicator variables based on whether a listing includes features like "Wifi", "Kitchen", or "Pool" in its amenities string.
