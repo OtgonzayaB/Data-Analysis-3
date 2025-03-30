@@ -477,3 +477,72 @@ XGBoost also picked up on these factors but gave a bit more weight to location a
 
 In summary, both models agree on what matters most for price, but XGBoost captures a broader picture by paying closer attention to location and amenities. This makes it a strong choice for building a pricing model that reflects both the basics and finer details of what makes a listing valuable.
 
+# Part 2. Validity
+
+To test the robustness and generalizability of the predictive models, I applied the same data wrangling process to two new datasets: **Florida Q4 and Denver Q4 2024.**
+
+**I created a reusable data cleaning function clean_airbnb_data() to handle this process consistently. This function:**
+
+- Cleans column names and parses data types.
+- Converts key host attributes to numeric indicators.
+- Filters out unrealistic prices and imputes missing values.
+- Extracts amenities into binary flags (e.g., has_wifi, has_pool).
+- Selects relevant variables and encodes categorical features.
+
+## 5. Repeating Data Wrangling on later quarter data
+
+```{r data cleaning function}
+
+clean_airbnb_data <- function(file_path) {
+  library(readxl)
+  library(dplyr)
+
+  df <- read_excel(file_path)
+
+  df <- df %>%
+    janitor::clean_names() %>%
+    mutate(
+      price = as.numeric(gsub("[$,]", "", price)),
+      host_is_superhost = ifelse(host_is_superhost == "t", 1, 0),
+      host_identity_verified = ifelse(host_identity_verified == "t", 1, 0),
+      host_has_profile_pic = ifelse(host_has_profile_pic == "t", 1, 0),
+      host_response_rate = as.numeric(gsub("%", "", host_response_rate)),
+      host_acceptance_rate = as.numeric(gsub("%", "", host_acceptance_rate)),
+      latitude = as.numeric(latitude),
+      longitude = as.numeric(longitude)
+    ) %>%
+    filter(!is.na(price), price > 20, price < 1000) %>%
+    mutate(
+      bedrooms = ifelse(is.na(bedrooms), median(bedrooms, na.rm = TRUE), bedrooms),
+      beds = ifelse(is.na(beds), median(beds, na.rm = TRUE), beds),
+      bathrooms = ifelse(is.na(bathrooms), median(bathrooms, na.rm = TRUE), bathrooms),
+      host_response_rate = ifelse(is.na(host_response_rate), median(host_response_rate, na.rm = TRUE), host_response_rate),
+      host_acceptance_rate = ifelse(is.na(host_acceptance_rate), median(host_acceptance_rate, na.rm = TRUE), host_acceptance_rate),
+      host_listings_count = ifelse(is.na(host_listings_count), median(host_listings_count, na.rm = TRUE), host_listings_count),
+      has_wifi = as.numeric(grepl("Wifi", amenities)),
+      has_kitchen = as.numeric(grepl("Kitchen", amenities)),
+      has_pool = as.numeric(grepl("Pool", amenities)),
+      has_aircon = as.numeric(grepl("Air conditioning", amenities)),
+      has_parking = as.numeric(grepl("Free parking", amenities)),
+      has_tv = as.numeric(grepl("TV", amenities)),
+      has_hot_tub = as.numeric(grepl("Hot tub", amenities)),
+      has_washer = as.numeric(grepl("Washer", amenities)),
+      has_dryer = as.numeric(grepl("Dryer", amenities))
+    ) %>%
+    select(price, accommodates, bedrooms, beds, bathrooms,
+           host_is_superhost, host_identity_verified, host_has_profile_pic,
+           host_response_rate, host_acceptance_rate, host_listings_count,
+           latitude, longitude, neighbourhood_cleansed,
+           property_type, room_type,
+           starts_with("has_")) %>%
+    drop_na() %>%
+    mutate(across(c(property_type, room_type, neighbourhood_cleansed), as.factor)) %>%
+    mutate(across(c(property_type, room_type, neighbourhood_cleansed), ~ as.numeric(as.factor(.x)))) %>%
+    select(where(~ length(unique(.)) > 1))  # drop constant columns
+
+  return(df)
+}
+```
+
+Using this standardized process, I produced two clean and structured datasets: one for Florida (Q4) and one for Denver (Q4), both ready for modeling.
+
