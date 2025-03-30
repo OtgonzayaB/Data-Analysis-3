@@ -311,3 +311,53 @@ The model was trained using 100 trees (ntree = 100) and configured to calculate 
 
 Random Forest significantly outperformed both OLS and LASSO, achieving an RMSE of 87.03 and an R^2 of 0.6232 on the test data. This indicates a notable improvement in predictive power. However, this came at the cost of longer training time of approximately 13.917 seconds, which is considerably higher than the previous models due to the ensemble nature of the algorithm.
 
+### 2.4. Model 4 - XGBoost
+
+```{r Model 4: XGBoost}
+
+# Prepare matrix for XGBoost
+dtrain <- xgb.DMatrix(data = as.matrix(X_train), label = y_train)
+dtest  <- xgb.DMatrix(data = as.matrix(X_test))
+
+# Define parameters
+params <- list(
+  objective = "reg:squarederror",
+  max_depth = 6,
+  eta = 0.1,
+  subsample = 0.8,
+  colsample_bytree = 0.8
+)
+
+# Track training time
+set.seed(123)
+start_time_xgb <- Sys.time()
+
+model_xgb <- xgboost(
+  params = params,
+  data = dtrain,
+  nrounds = 100,
+  verbose = 0
+)
+
+end_time_xgb <- Sys.time()
+train_time_xgb <- round(as.numeric(difftime(end_time_xgb, start_time_xgb, units = "secs")), 3)
+
+# Predict
+pred_xgb <- predict(model_xgb, newdata = dtest)
+
+# Evaluate
+rmse_xgb <- rmse(y_test, pred_xgb)
+r2_xgb <- R2(pred_xgb, y_test)
+
+# Create table
+results_xgb <- data.frame(
+  Model = "XGBoost",
+  RMSE = round(rmse_xgb, 2),
+  R2 = round(as.numeric(r2_xgb), 4),
+  Training_Time = train_time_xgb
+)
+
+# Display table
+knitr::kable(results_xgb, caption = "XGBoost Model Performance", align = "c")
+```
+
