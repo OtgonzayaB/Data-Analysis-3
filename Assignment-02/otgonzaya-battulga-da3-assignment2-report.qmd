@@ -70,3 +70,34 @@ df <- read_excel(file_path)
 names(df)
 ```
 
+# Part 1. Modelling
+
+First, I have looked at the column names and chosen the attributes and amenities I want to use to build the price model. I selected variables that are most likely to influence listing prices, including listing-level characteristics (number of bedrooms, bathrooms, accommodates etc), host attributes (superhost status, identity verification etc), geographic information (latitude, longitude, and neighbourhood etc), and key amenities such as WiFi, kitchen, pool, and parking.
+
+## 1. Data Wrangling
+
+```{r}
+#| output: false
+#| warning: false
+
+# Making sure price is numeric and has valid values
+df <- df %>%
+  mutate(price = as.numeric(gsub("[$,]", "", price))) %>%
+  filter(!is.na(price)) %>%
+  filter(price > 20 & price < 1000)
+
+# Clean up key columns
+df_model <- df %>%
+  mutate(
+    host_is_superhost = ifelse(host_is_superhost == "t", 1, 0),
+    host_identity_verified = ifelse(host_identity_verified == "t", 1, 0),
+    host_has_profile_pic = ifelse(host_has_profile_pic == "t", 1, 0),
+    host_response_rate = as.numeric(gsub("%", "", host_response_rate)),
+    host_acceptance_rate = as.numeric(gsub("%", "", host_acceptance_rate)),
+    latitude = as.numeric(latitude),
+    longitude = as.numeric(longitude)
+  )
+```
+
+The price column was first cleaned by removing dollar signs and commas, and filtered to exclude extreme outliers (keeping prices between $20 and $1000). Boolean features such as host_is_superhost, host_identity_verified, and host_has_profile_pic were converted from text to binary (1/0) format. Similarly, percentage-based features like host_response_rate and host_acceptance_rate were converted to numeric.
+
