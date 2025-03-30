@@ -229,3 +229,45 @@ knitr::kable(results_ols, caption = "OLS Model Performance", align = "c")
 
 The OLS model achieved a RMSE of 108.87 and an R^2 of 0.4101, indicating moderate predictive power. The model was relatively fast to train, completing in approximately 0.039 seconds. While OLS is simple and interpretable, its ability to capture complex relationships is limited compared to non-linear models.
 
+### 2.2. Model 2 - LASSO
+
+```{r Model 2: LASSO}
+
+# Convert data to matrix format
+X_train_mat <- model.matrix(price ~ ., data = train_filtered)[, -1]  # Remove intercept
+X_test_mat  <- model.matrix(price ~ ., data = test_filtered)[, -1]
+y_train_vec <- train_filtered$price
+
+# Track training time
+start_time_lasso <- Sys.time()
+
+# Train LASSO model with cross-validation
+lasso_cv <- cv.glmnet(X_train_mat, y_train_vec, alpha = 1)
+
+end_time_lasso <- Sys.time()
+train_time_lasso <- round(as.numeric(difftime(end_time_lasso, start_time_lasso, units = "secs")), 3)
+
+# Predict on test set using best lambda
+pred_lasso <- predict(lasso_cv, s = "lambda.min", newx = X_test_mat)
+
+# Evaluate
+rmse_lasso <- rmse(test$price, pred_lasso)
+r2_lasso <- R2(pred_lasso, test$price)
+
+# Create results table
+results_lasso <- data.frame(
+  Model = "LASSO",
+  RMSE = round(rmse_lasso, 2),
+  R2 = round(as.numeric(r2_lasso), 4),
+  Training_Time = train_time_lasso
+)
+
+# Display results
+knitr::kable(results_lasso, caption = "LASSO Model Performance", align = "c")
+```
+
+For the second model, I applied LASSO regression, which is particularly effective in high-dimensional settings and for automatic feature selection. Unlike OLS, LASSO adds a penalty term that can shrink some coefficients to exactly zero, effectively removing less informative predictors.
+
+Before training, the data was converted to a matrix format compatible with the glmnet package. I used cross-validation to select the optimal value of the regularization parameter (lambda.min). Training time was also recorded for later comparison.
+
+The LASSO model achieved a RMSE of 108.87 and an R^2 of 0.4102, which is nearly identical to the performance of the OLS model. However, LASSO provides the additional benefit of regularization, potentially improving generalization on unseen data. The model trained in 0.213 seconds, showing slightly higher computational cost compared to OLS due to the cross-validation step.
