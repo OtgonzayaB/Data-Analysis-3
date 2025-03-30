@@ -1,0 +1,702 @@
+---
+title: "Assignment 2"
+author: "Otgonzaya Battulga"
+date: "2025-03-30"
+format: html
+editor: visual
+---
+
+# Building a Prediction Model on House Prices.
+
+In this report, I have developed a pricing model to support the operation of a chain of Airbnb properties by building and evaluating machine learning models that predict listing prices based on property characteristics, host attributes, amenities, and location.
+
+The core dataset used is the **Q3 2024 Airbnb listings for Florida**, sourced from **Inside Airbnb**. This dataset contains over 16,000 observations, providing a comprehensive snapshot of the Florida short-term rental market. Extensive data wrangling was performed, including the extraction of key amenities, handling of missing values, and transformation of categorical variables into model ready features.
+
+**Five predictive models were developed and compared:**
+
+- Ordinary Least Squares (OLS)
+- LASSO Regression
+- Random Forest
+- XGBoost
+- CART
+
+Model performance was evaluated based on predictive accuracy (RMSE and R^2) and training time, summarized in a horserace table. The best-performing models, Random Forest and XGBoost were further analyzed to explore feature importance and identify key price drivers.
+
+**To test the validity and generalizability of the models, two additional datasets were introduced:**
+
+- A later snapshot from the same region: Florida Q4 2024
+- A different market within the U.S.: Denver Q4 2024
+
+These datasets were used to evaluate how well the models perform across time and geographic location, providing insights into their robustness and potential for wider deployment across an Airbnb portfolio.
+
+
+```{r loading libraries}
+#| output: false
+#| echo: false
+#| message: false
+#| warning: false
+
+library(readxl)
+library(tidyverse)
+library(caret)
+library(glmnet)
+library(randomForest)
+library(xgboost)
+library(e1071)
+library(Metrics)
+library(rpart)
+library(rpart.plot)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(MetBrewer)
+library(scales)
+library(kableExtra)
+```
+
+```{r importing the dataset}
+#| echo: false
+#| warning: false
+
+# Set the path to your dataset
+file_path <- "data/florida-q3-listings.xlsx"
+
+# Read the Excel file
+df <- read_excel(file_path)
+```
+
+```{r see column names}
+#| output: false
+#| echo: false
+
+names(df)
+```
+
+
+# Part 1. Modelling
+
+First, I have looked at the column names and chosen the attributes and amenities I want to use to build the price model. I selected variables that are most likely to influence listing prices, including listing-level characteristics (number of bedrooms, bathrooms, accommodates etc), host attributes (superhost status, identity verification etc), geographic information (latitude, longitude, and neighbourhood etc), and key amenities such as WiFi, kitchen, pool, and parking.
+
+## 1. Data Wrangling
+
+
+```{r}
+#| output: false
+#| warning: false
+
+# Making sure price is numeric and has valid values
+df <- df %>%
+  mutate(price = as.numeric(gsub("[$,]", "", price))) %>%
+  filter(!is.na(price)) %>%
+  filter(price > 20 & price < 1000)
+
+# Clean up key columns
+df_model <- df %>%
+  mutate(
+    host_is_superhost = ifelse(host_is_superhost == "t", 1, 0),
+    host_identity_verified = ifelse(host_identity_verified == "t", 1, 0),
+    host_has_profile_pic = ifelse(host_has_profile_pic == "t", 1, 0),
+    host_response_rate = as.numeric(gsub("%", "", host_response_rate)),
+    host_acceptance_rate = as.numeric(gsub("%", "", host_acceptance_rate)),
+    latitude = as.numeric(latitude),
+    longitude = as.numeric(longitude)
+  )
+```
+
+
+The price column was first cleaned by removing dollar signs and commas, and filtered to exclude extreme outliers (keeping prices between $20 and $1000). Boolean features such as host_is_superhost, host_identity_verified, and host_has_profile_pic were converted from text to binary (1/0) format. Similarly, percentage-based features like host_response_rate and host_acceptance_rate were converted to numeric.
+
+
+```{r}
+# Impute missing values for numerical columns
+df_model <- df_model %>%
+  mutate(
+    bedrooms = ifelse(is.na(bedrooms), median(bedrooms, na.rm = TRUE), bedrooms),
+    beds = ifelse(is.na(beds), median(beds, na.rm = TRUE), beds),
+    bathrooms = ifelse(is.na(bathrooms), median(bathrooms, na.rm = TRUE), bathrooms),
+    host_response_rate = ifelse(is.na(host_response_rate), median(host_response_rate, na.rm = TRUE), host_response_rate),
+    host_acceptance_rate = ifelse(is.na(host_acceptance_rate), median(host_acceptance_rate, na.rm = TRUE), host_acceptance_rate),
+    host_listings_count = ifelse(is.na(host_listings_count), median(host_listings_count, na.rm = TRUE), host_listings_count)
+  )
+
+# Parse amenities into binary features
+df_model <- df_model %>%
+  mutate(
+    has_wifi = as.numeric(grepl("Wifi", amenities)),
+    has_kitchen = as.numeric(grepl("Kitchen", amenities)),
+    has_pool = as.numeric(grepl("Pool", amenities)),
+    has_aircon = as.numeric(grepl("Air conditioning", amenities)),
+    has_parking = as.numeric(grepl("Free parking", amenities)),
+    has_tv = as.numeric(grepl("TV", amenities)),
+    has_hot_tub = as.numeric(grepl("Hot tub", amenities)),
+    has_washer = as.numeric(grepl("Washer", amenities)),
+    has_dryer = as.numeric(grepl("Dryer", amenities))
+  )
+```
+
+
+To handle missing data, I used median imputation for numerical fields such as bedrooms, bathrooms, beds, and the host-related response and acceptance rates. For the amenities, I used regular expressions to create binary indicator variables based on whether a listing includes features like "Wifi", "Kitchen", or "Pool" in its amenities string.
+
+
+```{r}
+#| output: false
+#| warning: false
+
+# Select relevant columns
+df_model <- df_model %>%
+  select(price, accommodates, bedrooms, beds, bathrooms,
+         host_is_superhost, host_identity_verified, host_has_profile_pic,
+         host_response_rate, host_acceptance_rate, host_listings_count,
+         latitude, longitude, neighbourhood_cleansed,
+         property_type, room_type,
+         starts_with("has_")) %>%
+  drop_na()
+
+# Convert categorical vars to numeric
+df_model <- df_model %>%
+  mutate(across(c(property_type, room_type, neighbourhood_cleansed), as.factor)) %>%
+  mutate(across(c(property_type, room_type, neighbourhood_cleansed), ~ as.numeric(as.factor(.x))))
+
+# Final check
+glimpse(df_model)
+```
+
+
+Finally, I converted categorical variables (property_type, room_type, and neighbourhood_cleansed) to numerical factors and removed any constant or missing-value-only columns to ensure compatibility with modeling.
+
+## 2. Building Predictive Models
+
+The cleaned and feature-engineered dataset was then split into training and testing sets, with 80% of the data used for model training and 20% for evaluation. Constant columns and those with only a single unique value were removed to prevent issues during model fitting.
+
+
+```{r train-test split}
+set.seed(123)
+trainIndex <- createDataPartition(df_model$price, p = 0.8, list = FALSE)
+train <- df_model[trainIndex, ]
+test  <- df_model[-trainIndex, ]
+
+# Separate features and target
+X_train <- train %>% select(-price)
+y_train <- train$price
+X_test <- test %>% select(-price)
+y_test <- test$price
+
+# Remove columns with only 1 unique value
+X_train <- X_train[, sapply(X_train, function(col) length(unique(col)) > 1)]
+X_test <- X_test[, colnames(X_train)]  # Match test columns to training set
+```
+
+
+### 2.1 Model 1 - OLS
+
+
+```{r Model 1: OLS}
+
+# Dropping constant columns from train
+train_filtered <- train[, sapply(train, function(x) length(unique(x)) > 1)]
+
+#  Make sure all characters/factors are valid
+train_filtered <- train_filtered %>%
+  mutate(across(where(is.character), as.factor)) %>%
+  mutate(across(where(is.factor), ~ droplevels(.)))
+
+# Start timing
+start_time_ols <- Sys.time()
+
+# Rebuild the model
+model_ols <- lm(price ~ ., data = train_filtered)
+
+# End timing
+end_time_ols <- Sys.time()
+train_time_ols <- round(as.numeric(difftime(end_time_ols, start_time_ols, units = "secs")), 3)  # in seconds
+
+# Apply same columns to test set
+test_filtered <- test[, colnames(train_filtered)]
+
+# Predicting with OLS
+pred_ols <- predict(model_ols, newdata = test_filtered)
+```
+
+
+As the first predictive model, I implemented an OLS regression. Before training, I ensured the training data had no constant columns and that any character variables were converted to factors with valid levels. This step was necessary to avoid errors during model fitting and ensure meaningful interpretation of coefficients.
+
+The model was trained using all available features to predict the listing price. I also measured the training time to later compare the computational efficiency of different models. The test dataset was aligned to include the same variables as the training set before making predictions.
+
+
+```{r Model 1: OLS Results}
+
+rmse_ols <- rmse(test$price, pred_ols)
+r2_ols <- R2(pred_ols, test$price)
+
+
+# Store results in a data frame
+results_ols <- data.frame(
+  Model = "OLS",
+  RMSE = round(rmse(test$price, pred_ols), 2),
+  R2 = round(R2(pred_ols, test$price), 4),
+  Training_Time = train_time_ols
+)
+
+# Display as a table
+knitr::kable(results_ols, caption = "OLS Model Performance", align = "c")
+```
+
+
+The OLS model achieved a RMSE of 108.87 and an R^2 of 0.4101, indicating moderate predictive power. The model was relatively fast to train, completing in approximately 0.039 seconds. While OLS is simple and interpretable, its ability to capture complex relationships is limited compared to non-linear models.
+
+### 2.2. Model 2 - LASSO
+
+
+```{r Model 2: LASSO}
+
+# Convert data to matrix format
+X_train_mat <- model.matrix(price ~ ., data = train_filtered)[, -1]  # Remove intercept
+X_test_mat  <- model.matrix(price ~ ., data = test_filtered)[, -1]
+y_train_vec <- train_filtered$price
+
+# Track training time
+start_time_lasso <- Sys.time()
+
+# Train LASSO model with cross-validation
+lasso_cv <- cv.glmnet(X_train_mat, y_train_vec, alpha = 1)
+
+end_time_lasso <- Sys.time()
+train_time_lasso <- round(as.numeric(difftime(end_time_lasso, start_time_lasso, units = "secs")), 3)
+
+# Predict on test set using best lambda
+pred_lasso <- predict(lasso_cv, s = "lambda.min", newx = X_test_mat)
+
+# Evaluate
+rmse_lasso <- rmse(test$price, pred_lasso)
+r2_lasso <- R2(pred_lasso, test$price)
+
+# Create results table
+results_lasso <- data.frame(
+  Model = "LASSO",
+  RMSE = round(rmse_lasso, 2),
+  R2 = round(as.numeric(r2_lasso), 4),
+  Training_Time = train_time_lasso
+)
+
+# Display results
+knitr::kable(results_lasso, caption = "LASSO Model Performance", align = "c")
+```
+
+
+For the second model, I applied LASSO regression, which is particularly effective in high-dimensional settings and for automatic feature selection. Unlike OLS, LASSO adds a penalty term that can shrink some coefficients to exactly zero, effectively removing less informative predictors.
+
+Before training, the data was converted to a matrix format compatible with the glmnet package. I used cross-validation to select the optimal value of the regularization parameter (lambda.min). Training time was also recorded for later comparison.
+
+The LASSO model achieved a RMSE of 108.87 and an R^2 of 0.4102, which is nearly identical to the performance of the OLS model. However, LASSO provides the additional benefit of regularization, potentially improving generalization on unseen data. The model trained in 0.213 seconds, showing slightly higher computational cost compared to OLS due to the cross-validation step.
+
+### 2.3. Model 3 - Random Forest
+
+
+```{r Model 3: Random Forest}
+
+# Track training time
+start_time_rf <- Sys.time()
+
+# Train model
+set.seed(123)
+model_rf <- randomForest(price ~ ., data = train_filtered, ntree = 100, importance = TRUE)
+
+end_time_rf <- Sys.time()
+train_time_rf <- round(as.numeric(difftime(end_time_rf, start_time_rf, units = "secs")), 3)
+
+# Predict
+pred_rf <- predict(model_rf, newdata = test_filtered)
+
+# Evaluate
+rmse_rf <- rmse(test$price, pred_rf)
+r2_rf <- R2(pred_rf, test$price)
+
+# Create results table
+results_rf <- data.frame(
+  Model = "Random Forest",
+  RMSE = round(rmse_rf, 2),
+  R2 = round(as.numeric(r2_rf), 4),
+  Training_Time = train_time_rf
+)
+
+# Display
+knitr::kable(results_rf, caption = "Random Forest Model Performance", align = "c")
+```
+
+
+The third model I implemented was a Random Forest, a powerful ensemble learning method that builds multiple decision trees and aggregates their predictions to improve accuracy and reduce overfitting. It is well-suited for capturing non-linear relationships and complex feature interactions.
+
+The model was trained using 100 trees (ntree = 100) and configured to calculate feature importance. I recorded the training time for comparison with the other models.
+
+Random Forest significantly outperformed both OLS and LASSO, achieving an RMSE of 87.03 and an R^2 of 0.6232 on the test data. This indicates a notable improvement in predictive power. However, this came at the cost of longer training time of approximately 13.917 seconds, which is considerably higher than the previous models due to the ensemble nature of the algorithm.
+
+### 2.4. Model 4 - XGBoost
+
+
+```{r Model 4: XGBoost}
+
+# Prepare matrix for XGBoost
+dtrain <- xgb.DMatrix(data = as.matrix(X_train), label = y_train)
+dtest  <- xgb.DMatrix(data = as.matrix(X_test))
+
+# Define parameters
+params <- list(
+  objective = "reg:squarederror",
+  max_depth = 6,
+  eta = 0.1,
+  subsample = 0.8,
+  colsample_bytree = 0.8
+)
+
+# Track training time
+set.seed(123)
+start_time_xgb <- Sys.time()
+
+model_xgb <- xgboost(
+  params = params,
+  data = dtrain,
+  nrounds = 100,
+  verbose = 0
+)
+
+end_time_xgb <- Sys.time()
+train_time_xgb <- round(as.numeric(difftime(end_time_xgb, start_time_xgb, units = "secs")), 3)
+
+# Predict
+pred_xgb <- predict(model_xgb, newdata = dtest)
+
+# Evaluate
+rmse_xgb <- rmse(y_test, pred_xgb)
+r2_xgb <- R2(pred_xgb, y_test)
+
+# Create table
+results_xgb <- data.frame(
+  Model = "XGBoost",
+  RMSE = round(rmse_xgb, 2),
+  R2 = round(as.numeric(r2_xgb), 4),
+  Training_Time = train_time_xgb
+)
+
+# Display table
+knitr::kable(results_xgb, caption = "XGBoost Model Performance", align = "c")
+```
+
+
+The fourth model I implemented was XGBoost, a popular and highly efficient boosting algorithm that builds trees sequentially, each one correcting the errors of the previous. XGBoost is known for its high performance and ability to handle complex, non-linear relationships while mitigating overfitting through regularization and subsampling.
+
+I set up the model with commonly effective hyperparameters, including max_depth = 6, eta = 0.1, and a subsample ratio of 0.8. The model was trained over 100 boosting rounds. Training time was recorded for comparison.
+
+XGBoost achieved the best performance among all tested models, with an RMSE of 86.64 and an R^2 of 0.6263. These results indicate that the model captured a substantial amount of the variance in price and made highly accurate predictions. The training time was also efficient at around 1.054 seconds, making it a strong candidate in both accuracy and scalability.
+
+### 2.5. Model 5 - CART
+
+
+```{r Model 5: CART}
+
+# Track training time
+start_time_cart <- Sys.time()
+
+# Fit the CART model
+model_cart <- rpart(price ~ ., data = train_filtered, method = "anova")
+
+end_time_cart <- Sys.time()
+train_time_cart <- round(as.numeric(difftime(end_time_cart, start_time_cart, units = "secs")), 3)
+
+# Predict on test set
+pred_cart <- predict(model_cart, newdata = test_filtered)
+
+# Evaluate performance
+rmse_cart <- rmse(test$price, pred_cart)
+r2_cart <- R2(pred_cart, test$price)
+
+# Create result table
+results_cart <- data.frame(
+  Model = "CART",
+  RMSE = round(rmse_cart, 2),
+  R2 = round(as.numeric(r2_cart), 4),
+  Training_Time = train_time_cart
+)
+
+# Display 
+knitr::kable(results_cart, caption = "CART Model Performance", align = "c")
+
+# Plotting the tree
+rpart.plot(model_cart, type = 2, extra = 101, under = TRUE, faclen = 0)
+
+```
+
+The final model implemented was a CART, which builds a single decision tree to predict prices by recursively splitting the dataset based on feature thresholds that minimize variance in the target variable.
+
+CART models are easy to interpret and visualize, making them particularly useful for understanding which features influence pricing decisions. The tree structure produced in this case reveals that bathrooms, host listings count, and accommodates were important splitting variables.
+
+Training was very fast, taking only 0.315 seconds, and the model achieved an RMSE of 113.31 and an R^2 of 0.3628. While the performance was weaker than more complex models like Random Forest and XGBoost, CART offers strong interpretability and remains a good baseline model.
+
+## 3. Model Comparisons
+
+To evaluate the predictive performance of the five models, I compared them using RMSE, R-squared, and training time. These metrics provide a comprehensive picture of both fit accuracy and time efficiency.
+
+
+```{r Combined Model Results}
+
+results_all <- rbind(results_ols, results_lasso, results_cart, results_rf, results_xgb)
+
+knitr::kable(results_all, caption = "Model Performance Comparison", align = "c")
+```
+
+
+Both XGBoost and Random Forest clearly outperformed the other models in terms of fit, with RMSE values of 86.64 and 87.03, and R^2 scores of 0.6263 and 0.6232, respectively. These results indicate that ensemble models were best at capturing complex and nonlinear relationships in the data, making them strong candidates for real-world deployment in Airbnb pricing strategies. In contrast, OLS and LASSO performed nearly identically, each yielding an RMSE around 108.87 and R^2 close to 0.41. This suggests that linear models could explain some of the variance in price but lacked the flexibility to capture deeper patterns. 
+
+The decision tree model (CART) showed the weakest predictive performance, with an RMSE of 113.31 and R^2 of 0.3628. However, it was one of the fastest models to train (0.315 seconds) and provides useful interpretability through tree structure. In terms of training time, OLS was the fastest (0.039s), followed by LASSO (0.213s) and CART. Random Forest was the slowest to train (13.917s) due to its iterative construction of multiple trees. XGBoost offered an excellent trade-off by training faster than Random Forest (1.054s) while delivering slightly better performance, making it the top overall performer. While Random Forest is a robust and interpretable alternative, XGBoost would be the preferred model for deployment due to its strong balance between speed and predictive power. Overall, ensemble methods substantially outperformed linear and tree based models, proving most suitable for the high dimensional, nonlinear nature of Airbnb pricing data.
+
+## 4. RF and Boosting Model Analysis
+
+
+```{r Random Forest Feature Importance}
+
+importance_rf <- importance(model_rf)
+importance_rf_df <- data.frame(
+  Feature = rownames(importance_rf),
+  Importance = importance_rf[, "IncNodePurity"]
+) %>%
+  arrange(desc(Importance)) %>%
+  dplyr::slice(1:10)
+
+# Plot
+ggplot(importance_rf_df, aes(x = reorder(Feature, Importance), y = Importance, fill = Feature)) +
+  geom_col(show.legend = FALSE, width = 0.7) +
+  coord_flip() +
+  scale_fill_manual(values = met.brewer("VanGogh2", 10)) +
+  labs(
+    title = "Random Forest – Top 10 Feature Importances",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+    axis.text = element_text(size = 12),
+    panel.grid.major.y = element_blank()
+  )
+```
+
+```{r XGBoost Feature Importance}
+
+importance_xgb_dt <- xgb.importance(model = model_xgb)
+top10_xgb <- importance_xgb_dt[order(-Gain)][1:10]
+
+# Plot
+xgb.plot.importance(
+  importance_matrix = top10_xgb,
+  top_n = 10,
+  measure = "Gain",
+  rel_to_first = TRUE,
+  main = "XGBoost - Top 10 Feature Importances",
+  col = met.brewer("VanGogh2", 10)  # Optional: Van Gogh colors!
+)
+```
+
+
+Both the Random Forest and XGBoost models identified similar key factors that affect Airbnb pricing. In both models, the number of bathrooms, how many guests a place can accommodate, and the number of bedrooms were the most important features. This makes sense, as larger and more comfortable listings tend to cost more.
+
+The Random Forest model also highlighted the number of properties a host manages, suggesting that experienced hosts may price differently. It showed that location (longitude and latitude) and host behavior, like how often they accept bookings, also matter. These results show that Random Forest can pick up on patterns in how listings are priced based on size, location, and host experience.
+
+XGBoost also picked up on these factors but gave a bit more weight to location and specific amenities, such as having a pool or Wi-Fi. This suggests that XGBoost is especially good at detecting smaller, more detailed effects that can influence price like being in a desirable neighborhood or offering popular features.
+
+In summary, both models agree on what matters most for price, but XGBoost captures a broader picture by paying closer attention to location and amenities. This makes it a strong choice for building a pricing model that reflects both the basics and finer details of what makes a listing valuable.
+
+# Part 2. Validity
+
+To test the robustness and generalizability of the predictive models, I applied the same data wrangling process to two new datasets: **Florida Q4 and Denver Q4 2024.**
+
+**I created a reusable data cleaning function clean_airbnb_data() to handle this process consistently. This function:**
+
+- Cleans column names and parses data types.
+- Converts key host attributes to numeric indicators.
+- Filters out unrealistic prices and imputes missing values.
+- Extracts amenities into binary flags (e.g., has_wifi, has_pool).
+- Selects relevant variables and encodes categorical features.
+
+## 5. Repeating Data Wrangling on later quarter data
+
+
+```{r data cleaning function}
+
+clean_airbnb_data <- function(file_path) {
+  library(readxl)
+  library(dplyr)
+
+  df <- read_excel(file_path)
+
+  df <- df %>%
+    janitor::clean_names() %>%
+    mutate(
+      price = as.numeric(gsub("[$,]", "", price)),
+      host_is_superhost = ifelse(host_is_superhost == "t", 1, 0),
+      host_identity_verified = ifelse(host_identity_verified == "t", 1, 0),
+      host_has_profile_pic = ifelse(host_has_profile_pic == "t", 1, 0),
+      host_response_rate = as.numeric(gsub("%", "", host_response_rate)),
+      host_acceptance_rate = as.numeric(gsub("%", "", host_acceptance_rate)),
+      latitude = as.numeric(latitude),
+      longitude = as.numeric(longitude)
+    ) %>%
+    filter(!is.na(price), price > 20, price < 1000) %>%
+    mutate(
+      bedrooms = ifelse(is.na(bedrooms), median(bedrooms, na.rm = TRUE), bedrooms),
+      beds = ifelse(is.na(beds), median(beds, na.rm = TRUE), beds),
+      bathrooms = ifelse(is.na(bathrooms), median(bathrooms, na.rm = TRUE), bathrooms),
+      host_response_rate = ifelse(is.na(host_response_rate), median(host_response_rate, na.rm = TRUE), host_response_rate),
+      host_acceptance_rate = ifelse(is.na(host_acceptance_rate), median(host_acceptance_rate, na.rm = TRUE), host_acceptance_rate),
+      host_listings_count = ifelse(is.na(host_listings_count), median(host_listings_count, na.rm = TRUE), host_listings_count),
+      has_wifi = as.numeric(grepl("Wifi", amenities)),
+      has_kitchen = as.numeric(grepl("Kitchen", amenities)),
+      has_pool = as.numeric(grepl("Pool", amenities)),
+      has_aircon = as.numeric(grepl("Air conditioning", amenities)),
+      has_parking = as.numeric(grepl("Free parking", amenities)),
+      has_tv = as.numeric(grepl("TV", amenities)),
+      has_hot_tub = as.numeric(grepl("Hot tub", amenities)),
+      has_washer = as.numeric(grepl("Washer", amenities)),
+      has_dryer = as.numeric(grepl("Dryer", amenities))
+    ) %>%
+    select(price, accommodates, bedrooms, beds, bathrooms,
+           host_is_superhost, host_identity_verified, host_has_profile_pic,
+           host_response_rate, host_acceptance_rate, host_listings_count,
+           latitude, longitude, neighbourhood_cleansed,
+           property_type, room_type,
+           starts_with("has_")) %>%
+    drop_na() %>%
+    mutate(across(c(property_type, room_type, neighbourhood_cleansed), as.factor)) %>%
+    mutate(across(c(property_type, room_type, neighbourhood_cleansed), ~ as.numeric(as.factor(.x)))) %>%
+    select(where(~ length(unique(.)) > 1))  # drop constant columns
+
+  return(df)
+}
+```
+
+
+Using this standardized process, I produced two clean and structured datasets: one for Florida (Q4) and one for Denver (Q4), both ready for modeling.
+
+
+```{r cleaning the later date and other city data}
+#| output: false
+#| echo: false
+#| warning: false
+florida_q4 <- clean_airbnb_data("data/florida-q4-listings.xlsx")
+denver_q4 <- clean_airbnb_data("data/denver-q4-listings.xlsx")
+```
+
+
+To evaluate performance on these new datasets, I created a general evaluate_model() function. It predicts prices using each model and computes RMSE and R^2 for both linear and tree based models, including a specific handling for XGBoost.
+
+
+```{r model evalution function}
+
+evaluate_model <- function(model, data, model_type = "ols") {
+  X <- data %>% select(-price)
+  y <- data$price
+  
+  if (model_type == "xgb") {
+    preds <- predict(model, newdata = xgb.DMatrix(data = as.matrix(X)))
+  } else {
+    preds <- predict(model, newdata = X)
+  }
+
+  return(c(
+    RMSE = rmse(y, preds),
+    R2 = R2(preds, y)
+  ))
+}
+```
+
+
+## 6. Applying Core Models to Q4 Florida and Denver Airbnb Data
+
+To evaluate how well the models generalize to newer data, I applied all five core models, OLS, LASSO, CART, Random Forest, and XGBoost to a new datasets from Florida and Denver, covering the fourth quarter.
+
+### 6.1. Applying to Florida Q4 Dataset 
+
+```{r Florida Q4 Models}
+
+# OLS
+ols_fl <- lm(price ~ ., data = florida_q4)
+ols_fl_results <- evaluate_model(ols_fl, florida_q4)
+
+# LASSO
+X_fl <- model.matrix(price ~ ., data = florida_q4)[, -1]
+y_fl <- florida_q4$price
+lasso_fl_model <- cv.glmnet(X_fl, y_fl, alpha = 1)
+lasso_fl_preds <- predict(lasso_fl_model, s = "lambda.min", newx = X_fl)
+lasso_fl_results <- c(RMSE = rmse(y_fl, lasso_fl_preds), R2 = R2(lasso_fl_preds, y_fl))
+
+# CART
+cart_fl <- rpart(price ~ ., data = florida_q4)
+cart_fl_results <- evaluate_model(cart_fl, florida_q4)
+
+# RF
+rf_fl_results <- evaluate_model(model_rf, florida_q4)
+
+# XGBoost
+xgb_fl_results <- evaluate_model(model_xgb, florida_q4, model_type = "xgb")
+```
+
+
+### 6.2. Applying to Denver Q4 Dataset
+
+```{r Denver Q4 Models}
+
+# OLS
+ols_dv <- lm(price ~ ., data = denver_q4)
+ols_dv_results <- evaluate_model(ols_dv, denver_q4)
+
+# LASSO
+X_dv <- model.matrix(price ~ ., data = denver_q4)[, -1]
+y_dv <- denver_q4$price
+lasso_dv_model <- cv.glmnet(X_dv, y_dv, alpha = 1)
+lasso_dv_preds <- predict(lasso_dv_model, s = "lambda.min", newx = X_dv)
+lasso_dv_results <- c(RMSE = rmse(y_dv, lasso_dv_preds), R2 = R2(lasso_dv_preds, y_dv))
+
+# CART
+cart_dv <- rpart(price ~ ., data = denver_q4)
+cart_dv_results <- evaluate_model(cart_dv, denver_q4)
+
+# RF
+rf_dv_results <- evaluate_model(model_rf, denver_q4)
+
+# XGBoost
+xgb_dv_results <- evaluate_model(model_xgb, denver_q4, model_type = "xgb")
+```
+
+
+### 6.3. Model Comparisons on new datasets
+
+
+```{r Model comparisons}
+model_names <- c("OLS", "LASSO", "CART", "Random Forest", "XGBoost")
+
+results_table <- data.frame(
+  Model = model_names,
+  FL_RMSE = c(ols_fl_results["RMSE"], lasso_fl_results["RMSE"], cart_fl_results["RMSE"], rf_fl_results["RMSE"], xgb_fl_results["RMSE"]),
+  FL_R2   = c(ols_fl_results["R2"],   lasso_fl_results["R2"],   cart_fl_results["R2"],   rf_fl_results["R2"],   xgb_fl_results["R2"]),
+  DV_RMSE = c(ols_dv_results["RMSE"], lasso_dv_results["RMSE"], cart_dv_results["RMSE"], rf_dv_results["RMSE"], xgb_dv_results["RMSE"]),
+  DV_R2   = c(ols_dv_results["R2"],   lasso_dv_results["R2"],   cart_dv_results["R2"],   rf_dv_results["R2"],   xgb_dv_results["R2"])
+)
+
+# Renaming the columns
+colnames(results_table) <- c("Model", "Florida RMSE", "Florida R²", "Denver RMSE", "Denver R²")
+
+kable(results_table,
+      caption = "Model Performance on Florida (Q4) and Denver Datasets",
+      align = "c",
+      digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), 
+                full_width = FALSE, 
+                position = "center") %>%
+  column_spec(2:5, width = "7em") %>%
+  row_spec(0, bold = TRUE)
+```
+
+
+Applying the five core models to the Florida Q4 and Denver Q4 datasets revealed some key insights about how well each model generalizes over time and across locations. In the Florida Q4 data, OLS and LASSO performed similarly, with RMSE values around 141 and R^2 scores close to 0.50. The CART model followed closely, showing slightly higher error and lower fit. Interestingly, Random Forest and XGBoost showed the highest R^2 scores (0.56 and 0.53), indicating they captured more variance in the data. However, their RMSE values were also higher, which may suggest that these models were more sensitive to changes in the data between quarters, possibly even overfitting to the Q3 trends.
+
+In the Denver Q4 dataset, OLS and LASSO once again provided stable results, with RMSE around 82 and R^2 close to 0.49. This suggests they generalize reasonably well even when applied to a different city. On the other hand, Random Forest and XGBoost performed worse, especially in terms of RMSE, implying that these more flexible models don’t always carry over smoothly to new data without tuning. CART remained consistently moderate in performance across both locations.
+
+Overall, the model comparisons showed a trade-off, while complex ensemble models like Random Forest and XGBoost can achieve strong results on the original training set, they may not always generalize as well to new settings. In contrast, simpler models like OLS and LASSO were more reliable across both time (Q4) and place (Denver). They were also faster to train and required less fine-tuning, making them a strong choice when robustness and ease of use are priorities.

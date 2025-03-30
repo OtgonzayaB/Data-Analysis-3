@@ -271,3 +271,43 @@ For the second model, I applied LASSO regression, which is particularly effectiv
 Before training, the data was converted to a matrix format compatible with the glmnet package. I used cross-validation to select the optimal value of the regularization parameter (lambda.min). Training time was also recorded for later comparison.
 
 The LASSO model achieved a RMSE of 108.87 and an R^2 of 0.4102, which is nearly identical to the performance of the OLS model. However, LASSO provides the additional benefit of regularization, potentially improving generalization on unseen data. The model trained in 0.213 seconds, showing slightly higher computational cost compared to OLS due to the cross-validation step.
+
+### 2.3. Model 3 - Random Forest
+
+```{r Model 3: Random Forest}
+
+# Track training time
+start_time_rf <- Sys.time()
+
+# Train model
+set.seed(123)
+model_rf <- randomForest(price ~ ., data = train_filtered, ntree = 100, importance = TRUE)
+
+end_time_rf <- Sys.time()
+train_time_rf <- round(as.numeric(difftime(end_time_rf, start_time_rf, units = "secs")), 3)
+
+# Predict
+pred_rf <- predict(model_rf, newdata = test_filtered)
+
+# Evaluate
+rmse_rf <- rmse(test$price, pred_rf)
+r2_rf <- R2(pred_rf, test$price)
+
+# Create results table
+results_rf <- data.frame(
+  Model = "Random Forest",
+  RMSE = round(rmse_rf, 2),
+  R2 = round(as.numeric(r2_rf), 4),
+  Training_Time = train_time_rf
+)
+
+# Display
+knitr::kable(results_rf, caption = "Random Forest Model Performance", align = "c")
+```
+
+The third model I implemented was a Random Forest, a powerful ensemble learning method that builds multiple decision trees and aggregates their predictions to improve accuracy and reduce overfitting. It is well-suited for capturing non-linear relationships and complex feature interactions.
+
+The model was trained using 100 trees (ntree = 100) and configured to calculate feature importance. I recorded the training time for comparison with the other models.
+
+Random Forest significantly outperformed both OLS and LASSO, achieving an RMSE of 87.03 and an R^2 of 0.6232 on the test data. This indicates a notable improvement in predictive power. However, this came at the cost of longer training time of approximately 13.917 seconds, which is considerably higher than the previous models due to the ensemble nature of the algorithm.
+
