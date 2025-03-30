@@ -176,3 +176,56 @@ X_train <- X_train[, sapply(X_train, function(col) length(unique(col)) > 1)]
 X_test <- X_test[, colnames(X_train)]  # Match test columns to training set
 ```
 
+### 2.1 Model 1 - OLS
+
+```{r Model 1: OLS}
+
+# Dropping constant columns from train
+train_filtered <- train[, sapply(train, function(x) length(unique(x)) > 1)]
+
+#  Make sure all characters/factors are valid
+train_filtered <- train_filtered %>%
+  mutate(across(where(is.character), as.factor)) %>%
+  mutate(across(where(is.factor), ~ droplevels(.)))
+
+# Start timing
+start_time_ols <- Sys.time()
+
+# Rebuild the model
+model_ols <- lm(price ~ ., data = train_filtered)
+
+# End timing
+end_time_ols <- Sys.time()
+train_time_ols <- round(as.numeric(difftime(end_time_ols, start_time_ols, units = "secs")), 3)  # in seconds
+
+# Apply same columns to test set
+test_filtered <- test[, colnames(train_filtered)]
+
+# Predicting with OLS
+pred_ols <- predict(model_ols, newdata = test_filtered)
+```
+
+As the first predictive model, I implemented an OLS regression. Before training, I ensured the training data had no constant columns and that any character variables were converted to factors with valid levels. This step was necessary to avoid errors during model fitting and ensure meaningful interpretation of coefficients.
+
+The model was trained using all available features to predict the listing price. I also measured the training time to later compare the computational efficiency of different models. The test dataset was aligned to include the same variables as the training set before making predictions.
+
+```{r Model 1: OLS Results}
+
+rmse_ols <- rmse(test$price, pred_ols)
+r2_ols <- R2(pred_ols, test$price)
+
+
+# Store results in a data frame
+results_ols <- data.frame(
+  Model = "OLS",
+  RMSE = round(rmse(test$price, pred_ols), 2),
+  R2 = round(R2(pred_ols, test$price), 4),
+  Training_Time = train_time_ols
+)
+
+# Display as a table
+knitr::kable(results_ols, caption = "OLS Model Performance", align = "c")
+```
+
+The OLS model achieved a RMSE of 108.87 and an R^2 of 0.4101, indicating moderate predictive power. The model was relatively fast to train, completing in approximately 0.039 seconds. While OLS is simple and interpretable, its ability to capture complex relationships is limited compared to non-linear models.
+
