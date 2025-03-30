@@ -361,3 +361,50 @@ results_xgb <- data.frame(
 knitr::kable(results_xgb, caption = "XGBoost Model Performance", align = "c")
 ```
 
+The fourth model I implemented was XGBoost, a popular and highly efficient boosting algorithm that builds trees sequentially, each one correcting the errors of the previous. XGBoost is known for its high performance and ability to handle complex, non-linear relationships while mitigating overfitting through regularization and subsampling.
+
+I set up the model with commonly effective hyperparameters, including max_depth = 6, eta = 0.1, and a subsample ratio of 0.8. The model was trained over 100 boosting rounds. Training time was recorded for comparison.
+
+XGBoost achieved the best performance among all tested models, with an RMSE of 86.64 and an R^2 of 0.6263. These results indicate that the model captured a substantial amount of the variance in price and made highly accurate predictions. The training time was also efficient at around 1.054 seconds, making it a strong candidate in both accuracy and scalability.
+
+### 2.5. Model 5 - CART
+
+```{r Model 5: CART}
+
+# Track training time
+start_time_cart <- Sys.time()
+
+# Fit the CART model
+model_cart <- rpart(price ~ ., data = train_filtered, method = "anova")
+
+end_time_cart <- Sys.time()
+train_time_cart <- round(as.numeric(difftime(end_time_cart, start_time_cart, units = "secs")), 3)
+
+# Predict on test set
+pred_cart <- predict(model_cart, newdata = test_filtered)
+
+# Evaluate performance
+rmse_cart <- rmse(test$price, pred_cart)
+r2_cart <- R2(pred_cart, test$price)
+
+# Create result table
+results_cart <- data.frame(
+  Model = "CART",
+  RMSE = round(rmse_cart, 2),
+  R2 = round(as.numeric(r2_cart), 4),
+  Training_Time = train_time_cart
+)
+
+# Display 
+knitr::kable(results_cart, caption = "CART Model Performance", align = "c")
+
+# Plotting the tree
+rpart.plot(model_cart, type = 2, extra = 101, under = TRUE, faclen = 0)
+
+```
+The final model implemented was a CART, which builds a single decision tree to predict prices by recursively splitting the dataset based on feature thresholds that minimize variance in the target variable.
+
+CART models are easy to interpret and visualize, making them particularly useful for understanding which features influence pricing decisions. The tree structure produced in this case reveals that bathrooms, host listings count, and accommodates were important splitting variables.
+
+Training was very fast, taking only 0.315 seconds, and the model achieved an RMSE of 113.31 and an R^2 of 0.3628. While the performance was weaker than more complex models like Random Forest and XGBoost, CART offers strong interpretability and remains a good baseline model.
+
