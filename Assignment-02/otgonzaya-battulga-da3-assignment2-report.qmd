@@ -629,3 +629,35 @@ rf_dv_results <- evaluate_model(model_rf, denver_q4)
 xgb_dv_results <- evaluate_model(model_xgb, denver_q4, model_type = "xgb")
 ```
 
+### 6.3. Model Comparisons on new datasets
+
+```{r Model comparisons}
+model_names <- c("OLS", "LASSO", "CART", "Random Forest", "XGBoost")
+
+results_table <- data.frame(
+  Model = model_names,
+  FL_RMSE = c(ols_fl_results["RMSE"], lasso_fl_results["RMSE"], cart_fl_results["RMSE"], rf_fl_results["RMSE"], xgb_fl_results["RMSE"]),
+  FL_R2   = c(ols_fl_results["R2"],   lasso_fl_results["R2"],   cart_fl_results["R2"],   rf_fl_results["R2"],   xgb_fl_results["R2"]),
+  DV_RMSE = c(ols_dv_results["RMSE"], lasso_dv_results["RMSE"], cart_dv_results["RMSE"], rf_dv_results["RMSE"], xgb_dv_results["RMSE"]),
+  DV_R2   = c(ols_dv_results["R2"],   lasso_dv_results["R2"],   cart_dv_results["R2"],   rf_dv_results["R2"],   xgb_dv_results["R2"])
+)
+
+# Renaming the columns
+colnames(results_table) <- c("Model", "Florida RMSE", "Florida R²", "Denver RMSE", "Denver R²")
+
+kable(results_table,
+      caption = "Model Performance on Florida (Q4) and Denver Datasets",
+      align = "c",
+      digits = 4) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), 
+                full_width = FALSE, 
+                position = "center") %>%
+  column_spec(2:5, width = "7em") %>%
+  row_spec(0, bold = TRUE)
+```
+
+Applying the five core models to the Florida Q4 and Denver Q4 datasets revealed some key insights about how well each model generalizes over time and across locations. In the Florida Q4 data, OLS and LASSO performed similarly, with RMSE values around 141 and R^2 scores close to 0.50. The CART model followed closely, showing slightly higher error and lower fit. Interestingly, Random Forest and XGBoost showed the highest R^2 scores (0.56 and 0.53), indicating they captured more variance in the data. However, their RMSE values were also higher, which may suggest that these models were more sensitive to changes in the data between quarters, possibly even overfitting to the Q3 trends.
+
+In the Denver Q4 dataset, OLS and LASSO once again provided stable results, with RMSE around 82 and R^2 close to 0.49. This suggests they generalize reasonably well even when applied to a different city. On the other hand, Random Forest and XGBoost performed worse, especially in terms of RMSE, implying that these more flexible models don’t always carry over smoothly to new data without tuning. CART remained consistently moderate in performance across both locations.
+
+Overall, the model comparisons showed a trade-off, while complex ensemble models like Random Forest and XGBoost can achieve strong results on the original training set, they may not always generalize as well to new settings. In contrast, simpler models like OLS and LASSO were more reliable across both time (Q4) and place (Denver). They were also faster to train and required less fine-tuning, making them a strong choice when robustness and ease of use are priorities.
