@@ -259,3 +259,35 @@ lines(lasso_results$thresholds, lasso_results$loss_vector, col = "red", lwd = 2)
 legend("topright", legend = c("Random Forest", "Logit", "LASSO"),
        col = c("darkgreen", "blue", "red"), lwd = 2)
 ```
+## Part 3: Discussion of results
+
+### Confusion Matrix of the Models
+
+```{r}
+#| echo: false
+
+# Convert confusion matrices to data frames 
+logit_cm <- as.data.frame.matrix(logit_results$confusion_matrix)
+rf_cm <- as.data.frame.matrix(rf_results$confusion_matrix)
+lasso_cm <- as.data.frame.matrix(lasso_results$confusion_matrix)
+
+# Add model labels and restructure each confusion matrix
+format_cm <- function(cm, model_name) {
+  cm_df <- as.data.frame.matrix(cm)
+  cm_df$Actual <- rownames(cm_df)
+  cm_df$Model <- model_name
+  cm_df <- cm_df[, c("Model", "Actual", "no", "yes")]
+  colnames(cm_df) <- c("Model", "Actual", "Predicted: No", "Predicted: Yes")
+  return(cm_df)
+}
+
+# Format and bind all three
+logit_combined <- format_cm(logit_cm, "Logit")
+rf_combined <- format_cm(rf_cm, "Random Forest")
+lasso_combined <- format_cm(lasso_cm, "LASSO")
+
+combined_cm <- bind_rows(logit_combined, rf_combined, lasso_combined)
+
+# Display as one nice table
+kable(combined_cm, caption = "Confusion Matrices at Optimal Thresholds (All Models)", row.names = FALSE)
+```
