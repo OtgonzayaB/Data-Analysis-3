@@ -162,3 +162,27 @@ lasso_model <- train(fast_growth ~ ., data = model_data,
                      trControl = cv_ctrl)
 ```
 
+### Model Performance Comparison 
+```{r compare model performance}
+#| echo: false
+#| output: false
+
+resamps <- resamples(list(Logit = logit_model, RF = rf_model, LASSO = lasso_model))
+summary(resamps)
+
+# Extract the summary
+perf_summary <- summary(resamps)$statistics
+
+# Extract the Mean values only
+model_perf <- data.frame(
+  ROC_AUC = perf_summary$ROC[, "Mean"],
+  Sensitivity = perf_summary$Sens[, "Mean"],
+  Specificity = perf_summary$Spec[, "Mean"]
+)
+```
+
+```{r}
+#| echo: false
+
+kable(model_perf, digits = 4, caption = "Cross-Validated Model Performance")
+```
