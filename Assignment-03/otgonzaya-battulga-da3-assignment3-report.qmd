@@ -238,3 +238,24 @@ evaluate_model_loss <- function(model, data, loss_FN = 10000, loss_FP = 2000) {
   )
 }
 ```
+```{r expected loss evaluation across models}
+#| output: false
+#| echo: false
+#| warning: false
+
+logit_results <- evaluate_model_loss(logit_model, model_data)
+rf_results <- evaluate_model_loss(rf_model, model_data)
+lasso_results <- evaluate_model_loss(lasso_model, model_data)
+```
+```{r}
+#| echo: false
+
+plot(rf_results$thresholds, rf_results$loss_vector, type = "l", col = "darkgreen", lwd = 2,
+     ylim = range(c(rf_results$loss_vector, logit_results$loss_vector, lasso_results$loss_vector)),
+     xlab = "Threshold", ylab = "Expected Loss", main = "Expected Loss vs Threshold")
+
+lines(logit_results$thresholds, logit_results$loss_vector, col = "blue", lwd = 2)
+lines(lasso_results$thresholds, lasso_results$loss_vector, col = "red", lwd = 2)
+legend("topright", legend = c("Random Forest", "Logit", "LASSO"),
+       col = c("darkgreen", "blue", "red"), lwd = 2)
+```
