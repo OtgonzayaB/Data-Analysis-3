@@ -303,3 +303,67 @@ loss_summary <- data.frame(
 
 kable(loss_summary, digits = 4, caption = "Expected Loss at Optimal Thresholds")
 ```
+```{r define industry groups}
+#| output: false
+#| echo: false
+
+# Manufacturing: NACE 10–33
+df_model <- df_model %>%
+  mutate(ind2 = as.integer(as.character(ind2)))  
+
+manufacturing <- df_model %>%
+  filter(ind2 >= 10 & ind2 <= 33)
+
+# Services: repair (95), accommodation (55), food (56)
+services <- df_model %>%
+  filter(ind2 %in% c(55, 56, 95))
+```
+
+```{r}
+#| output: false
+#| echo: false
+
+get_model_subset <- function(data) {
+  data %>%
+    select(fast_growth, sales, firm_age, ceo_age, equity_ratio, liquidity_ratio,
+           foreign_mgmt, female_ceo, region_m, ind2, labor_avg) %>%
+    drop_na() %>%
+    mutate(
+      fast_growth = factor(fast_growth, levels = c(0, 1), labels = c("no", "yes")),
+      region_m = factor(region_m, levels = levels(model_data$region_m)),
+      ind2 = factor(as.character(ind2), levels = levels(model_data$ind2))
+    )
+}
+
+
+
+manu_data <- get_model_subset(manufacturing)
+serv_data <- get_model_subset(services)
+
+manu_results <- evaluate_model_loss(rf_model, manu_data)
+serv_results <- evaluate_model_loss(rf_model, serv_data)
+```
+
+```{r}
+#| echo: false
+
+# Convert to data frames and reshape
+format_cm <- function(cm, sector_name) {
+  cm_df <- as.data.frame.matrix(cm)
+  cm_df$Actual <- rownames(cm_df)  # This creates the 'Actual' column
+  cm_df$Sector <- sector_name
+  cm_df <- cm_df[, c("Sector", "Actual", "no", "yes")]  # Reorder columns
+  colnames(cm_df) <- c("Sector", "Actual", "Predicted: No", "Predicted: Yes")
+  return(cm_df)
+}
+
+# Format both matrices
+cm_manu <- format_cm(manu_results$confusion_matrix, "Manufacturing")
+cm_serv <- format_cm(serv_results$confusion_matrix, "Services")
+
+# Combine them
+combined_cm <- rbind(cm_manu, cm_serv)
+
+# Print clean table with no rownames
+kable(combined_cm, caption = "Confusion Matrix by Sector at Optimal Threshold", row.names = FALSE)
+```
