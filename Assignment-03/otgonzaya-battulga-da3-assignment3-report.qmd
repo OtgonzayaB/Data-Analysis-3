@@ -186,3 +186,55 @@ model_perf <- data.frame(
 
 kable(model_perf, digits = 4, caption = "Cross-Validated Model Performance")
 ```
+## Part 2: Classification
+
+```{r}
+#| output: false
+#| echo: false
+
+get_model_subset <- function(data) {
+  data %>%
+    select(fast_growth, sales, firm_age, ceo_age, equity_ratio, liquidity_ratio,
+           foreign_mgmt, female_ceo, region_m, ind2, labor_avg) %>%
+    drop_na() %>%
+    mutate(
+      fast_growth = factor(fast_growth, levels = c(0, 1), labels = c("no", "yes")),
+      region_m = factor(region_m, levels = levels(model_data$region_m)),
+      ind2 = factor(ind2, levels = levels(model_data$ind2)),
+      urban_m = factor(urban_m, levels = levels(model_data$urban_m))
+    )
+}
+```
+### Cost-sensitive Threshold Optimization
+
+```{r}
+evaluate_model_loss <- function(model, data, loss_FN = 10000, loss_FP = 2000) {
+  probs <- predict(model, data, type = "prob")[, "yes"]
+  true <- data$fast_growth
+  thresholds <- seq(0.01, 0.99, by = 0.01)
+
+  expected_loss <- sapply(thresholds, function(thresh) {
+    preds <- ifelse(probs > thresh, "yes", "no")
+    cm <- table(Predicted = preds, Actual = true)
+
+    FN <- ifelse("no" %in% rownames(cm) & "yes" %in% colnames(cm), cm["no", "yes"], 0)
+    FP <- ifelse("yes" %in% rownames(cm) & "no" %in% colnames(cm), cm["yes", "no"], 0)
+
+    FN * loss_FN + FP * loss_FP
+  })
+
+  best_i <- which.min(expected_loss)
+  best_thresh <- thresholds[best_i]
+  final_preds <- ifelse(probs > best_thresh, "yes", "no")
+  cm <- table(Predicted = final_preds, Actual = true)
+
+  list(
+    model_name = deparse(substitute(model)),
+    threshold = best_thresh,
+    expected_loss = expected_loss[best_i],
+    confusion_matrix = cm,
+    loss_vector = expected_loss,
+    thresholds = thresholds
+  )
+}
+```
