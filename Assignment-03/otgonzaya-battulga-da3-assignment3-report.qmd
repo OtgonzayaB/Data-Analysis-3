@@ -21,3 +21,57 @@ library(knitr)
 # Load data
 df <- read_csv("data/cs_bisnode_panel.csv")
 ```
+## Fast growing firm variable construction
+
+```{r define fast growing firms}
+#| output: false
+#| echo: false
+
+# Filter only relevant years
+sales_growth <- df %>%
+  filter(year %in% c(2012, 2014)) %>%
+  select(comp_id, year, sales) %>%
+  filter(!is.na(sales) & sales > 0) %>%
+  mutate(log_sales = log(sales)) %>%
+  select(comp_id, year, log_sales) %>%
+  pivot_wider(names_from = year, values_from = log_sales, names_prefix = "sales_") %>%
+  mutate(growth = sales_2014 - sales_2012) %>%
+  filter(!is.na(growth))
+
+# Define fast growth as top 20% 
+cutoff <- quantile(sales_growth$growth, 0.8, na.rm = TRUE)
+
+sales_growth <- sales_growth %>%
+  mutate(fast_growth = ifelse(growth >= cutoff, 1, 0))
+```
+## Feature engineering
+
+```{r}
+#| output: false
+#| echo: false
+
+# Join labels with 2012 data
+df_2012 <- df %>%
+  filter(year == 2012)
+
+df_model <- df_2012 %>%
+  left_join(sales_growth %>% select(comp_id, growth, fast_growth), by = "comp_id") %>%
+  filter(!is.na(fast_growth))
+```
+
+```{r}
+#| output: false
+#| echo: false
+
+df_model <- df_model %>%
+  mutate(
+    ceo_age = year - birth_year,
+    firm_age = year - founded_year,
+    equity_ratio = share_eq / (fixed_assets + curr_assets + liq_assets + intang_assets),
+    liquidity_ratio = liq_assets / curr_liab,
+    ceo_young = ifelse(ceo_age < 40 & ceo_age > 18, 1, 0),
+    foreign_mgmt = as.integer(foreign == 1),
+    female_ceo = as.integer(female == 1)
+  ) %>%
+  mutate(across(c(ceo_age, firm_age, equity_ratio, liquidity_ratio), ~ifelse(is.infinite(.) | is.nan(.), NA, .)))
+```
