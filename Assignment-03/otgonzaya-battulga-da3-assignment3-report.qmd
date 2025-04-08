@@ -75,3 +75,35 @@ df_model <- df_model %>%
   ) %>%
   mutate(across(c(ceo_age, firm_age, equity_ratio, liquidity_ratio), ~ifelse(is.infinite(.) | is.nan(.), NA, .)))
 ```
+## Modeling dataset preparation
+
+```{r}
+#| output: false
+#| echo: false
+df_model <- df_model %>%
+  mutate(
+    region_m = factor(region_m),
+    ind2 = factor(ind2),
+    ind = factor(ind),
+    urban_m = factor(urban_m),
+    gender = factor(gender),
+    origin = factor(origin)
+  )
+```
+
+```{r preparing modeling data}
+#| output: false
+#| echo: false
+
+set.seed(123)
+
+# Drop missing values (or impute if you prefer later)
+model_data <- df_model %>%
+  select(fast_growth, sales, firm_age, ceo_age, equity_ratio, liquidity_ratio,
+         foreign_mgmt, female_ceo, region_m, ind2, labor_avg) %>%
+  drop_na()
+
+# Make fast_growth a factor (for classification)
+model_data$fast_growth <- factor(model_data$fast_growth, levels = c(0, 1), labels = c("no", "yes"))
+```
+
