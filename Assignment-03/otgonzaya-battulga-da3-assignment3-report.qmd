@@ -1,0 +1,23 @@
+```{r load libraries}
+#| warning: false
+#| message: false
+#| output: false
+#| echo: false
+
+library(readr)
+library(dplyr)
+library(tidyr)
+library(caret)
+library(randomForest)
+library(glmnet)
+library(knitr)
+```
+
+```{r import dataset}
+#| message: false
+#| output: false
+#| echo: false
+
+# Load data
+df <- read_csv("data/cs_bisnode_panel.csv")
+```
