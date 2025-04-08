@@ -107,3 +107,58 @@ model_data <- df_model %>%
 model_data$fast_growth <- factor(model_data$fast_growth, levels = c(0, 1), labels = c("no", "yes"))
 ```
 
+# Task 1
+## Part 1: Probability prediction 
+
+```{r setup cross validation control}
+#| output: false
+#| echo: false
+
+cv_ctrl <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,  # For ROC
+  savePredictions = "final"
+)
+```
+
+### Logitistic Regression  Model
+
+```{r logit model}
+#| warning: false
+#| output: false
+#| echo: false
+
+logit_model <- train(fast_growth ~ ., data = model_data,
+                     method = "glm",
+                     family = "binomial",
+                     metric = "ROC",
+                     trControl = cv_ctrl)
+```
+### Random Forest Model
+
+```{r random forest model}
+#| output: false
+#| echo: false
+
+rf_model <- train(fast_growth ~ ., data = model_data,
+                  method = "rf",
+                  metric = "ROC",
+                  trControl = cv_ctrl,
+                  tuneLength = 3,
+                  ntree = 100)
+```
+
+### LASSO Model
+
+```{r lasso model}
+#| output: false
+#| echo: false
+
+lasso_model <- train(fast_growth ~ ., data = model_data,
+                     method = "glmnet",
+                     metric = "ROC",
+                     trControl = cv_ctrl)
+```
+
