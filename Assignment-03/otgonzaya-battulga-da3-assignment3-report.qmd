@@ -291,3 +291,15 @@ combined_cm <- bind_rows(logit_combined, rf_combined, lasso_combined)
 # Display as one nice table
 kable(combined_cm, caption = "Confusion Matrices at Optimal Thresholds (All Models)", row.names = FALSE)
 ```
+### Expected Loss Comparison
+```{r}
+#| echo: false
+
+loss_summary <- data.frame(
+  Model = c("Logit", "Random Forest", "LASSO"),
+  Threshold = c(logit_results$threshold, rf_results$threshold, lasso_results$threshold),
+  Expected_Loss = c(logit_results$expected_loss, rf_results$expected_loss, lasso_results$expected_loss)
+)
+
+kable(loss_summary, digits = 4, caption = "Expected Loss at Optimal Thresholds")
+```
